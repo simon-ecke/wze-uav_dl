@@ -5,9 +5,10 @@ from typing import Dict, List, Tuple, Union
 import numpy as np
 import pandas as pd
 import h5py
+import re
 #import skimage.measure
 
-#import findatree.transformations as transformations
+#import findatree_roi.transformations as transformations
 
 
 def pad_to_size(array, to_size:int=300):
@@ -172,6 +173,94 @@ def rois_to_hdf5(
 
         pass
 
+
+def rois_to_hdf5_v2(
+    rois,
+    params_rois,
+    crowns: Dict, 
+    params_crowns: Dict,
+    dir_name: str='/home/flostehr/data/processed',
+    ) -> None:
+
+    # Define name of .hdf5
+    name = f"tnr{params_rois['tnr']}_rois.hdf5"
+    # Define full path to .hdf5, i.e. directory + name
+    path = os.path.join(dir_name, name)
+    # Define group name
+    group_name = 'rois'
+
+    # Now write group
+    with h5py.File(path, 'w') as f:
+
+        # Create main group
+        grp = f.create_group(group_name)
+
+        # Assign parameters as main group attributes
+        for key in params_rois:
+            grp.attrs[key] = params_rois[key]
+
+        # Assign all channels as main group dsets
+        for key in rois:
+            grp.create_dataset(key, data=rois[key])
+
+        pass
+    
+    #Define group 2
+
+    try:
+        group_name = 'crowns_' + params_crowns['origin'] 
+    except:
+        print("Please provide `'origin'` in params_crowns")
+
+    # Completely delete group and all of it's subgroups, dsets and respective attributes
+    hdf5_delete_group(path, group_name)
+
+    # Open file for writing if exists, create otherwise.
+    with h5py.File(path, 'a') as f:
+
+        ######################################### Group
+        # Create main group
+        grp_main = f.create_group(group_name)
+
+        # Assign parameters as main group attributes
+        for key in params_crowns:
+            grp_main.attrs[key] = params_crowns[key]
+        
+        ########################################### Polygons subgroup
+        # Create 'polygons' subgroup
+        grp = f.create_group(group_name + '/polygons')
+
+        # Assign polygons as datasets in 'polygons' subgroup
+        for idx, poly in crowns['polygons'].items():  
+            key = str(idx).zfill(5) # Convert idx to key to string with zero padding
+            grp.create_dataset(key, data = poly)
+
+        ########################################### Features subgroup
+        # Create 'features' subgroup
+        grp = f.create_group(group_name + '/features')
+
+        # Assign all features (i.e. feature sets like 'terrestrial or 'photometric') in crowns['features'] as datasets in 'features' subgroup.
+        for key, features in crowns['features'].items():
+
+            # Assert that number of crowns in features are the same as number of crowns in params_crowns
+            message = f"`len(crowns['features'][{key}]` is {features.shape[0]} but `params_crowns['number_crowns']` is {params_crowns['number_crowns']})"
+            assert features.shape[0] == params_crowns['number_crowns'], message
+
+            # Write features as dataset
+            grp.create_dataset(key, data = features)
+            
+            # Define attributes dict for features dataset
+            features_attrs = {}
+            features_attrs['names'] = [name for name in features.dtype.names]
+            features_attrs['dtypes'] = [str(features.dtype[i]) for i in range(len(features.dtype))]
+
+            # Write feature parameters into main group attributes
+            for key_attr, val_attr in features_attrs.items():
+                grp_main.attrs['features_' + key + '_' + key_attr] = val_attr
+
+                
+    pass
+    
     
 def load_rois_from_hdf5(
     path: str,
@@ -200,6 +289,108 @@ def load_rois_from_hdf5(
             params_rois[key] = grp.attrs[key]
     
     return rois, params_rois
+
+
+def load_rois_from_hdf5_v2(
+    path: str,
+    groups: List = ['channels', 'crowns_human', 'crowns_water'],
+    features_only = False,
+    load_sets: Union[List, None]=None,
+    ) -> Tuple[Dict, Dict]:
+    
+    # Initialize data and parameters dictionary
+    rois= {}
+    params_rois = {}
+    
+    for group in groups:
+        assert group in ['channels', 'crowns_human', 'crowns_water'], f"Group `{group}` is not a valid group."
+    # Initialize data and parameters dictionary
+    data = {}
+    params_data = {}
+    info = ''
+
+    with h5py.File(path, 'r') as f:
+        grp = f.get('rois')
+        
+        # If load_sets set to None load all sets
+        if load_sets is None:
+            load_sets = grp.keys()
+            
+        # Assign rois
+        for key in grp.keys():
+            if key in load_sets: 
+                # Assign to rois
+                rois[key] = grp.get(key)[()]
+            
+        # Assign params_rois
+        for key in grp.attrs.keys():
+            params_rois[key] = grp.attrs[key]
+            
+        # Assign crown parameters
+        for group in groups:
+
+            ################################ Channels
+            if group == 'channels':
+                try: 
+                    # Get `channels` group pointer
+                    grp = f.get('channels')
+                    # Assign `channels` datasets as dict to data
+                    data['channels'] = dict([(key, grp.get(key)[()]) for key in grp.keys()])
+                    # Assign `channels` attributes as dict to data_params
+                    params_data['channels'] = dict([(key, grp.attrs[key]) for key in grp.attrs.keys()])
+                except:
+                    info += f"Warning: Group `{group}` not found under path: {path}\n"
+
+            ################################ Crowns
+            if bool(re.search('crowns_*', group)):
+                
+                try:
+                    # Get crowns group pointer
+                    grp = f.get(group)
+                    # Assign `crowns_*` attributes to params as dict
+                    params_data[group] = dict([(key, grp.attrs[key]) for key in grp.attrs.keys()])
+                    # Initialize crowns sub-dictionary
+                    data_crowns = {}
+                    
+                    ################################ Features sub-group
+                    try:
+                        # Get features sub-group pointer
+                        grp = f.get(group + '/features')
+                        # Get features as dict
+                        features = dict([(key, grp.get(key)[()]) for key in grp.keys()])
+                        # Convert features to numpy arrays with correct dtype
+                        for key, val in features.items():
+                            features[key] = np.array(val, dtype=val.dtype)
+                        # Assign features to crowns sub-dictionary
+                        data_crowns['features'] = features
+                    except:
+                        info += f"Warning: Group `{group + '/features'}` not found under path: {path}\n"
+
+                    ################################ Polygons sub-group
+                    # Assign polygons datasets
+                    if not features_only:
+                        try:
+                            # Get polygons sub-group pointer
+                            grp = f.get(group + '/polygons')
+                            # Get features as dict
+                            polygons = dict([(int(key), grp.get(key)[()]) for key in grp.keys()])
+                            # Assign polygons to crowns sub-dictionary
+                            data_crowns['polygons'] = polygons
+                        except:
+                           exceptions += f"Warning: Group `{group + '/polygons'}` not found under path: {path}\n"
+                    
+                    # Assign crowns sub-dictionary to data
+                    data[group] = data_crowns
+                    
+                    # Add info to params
+                    params_data['io.load_hdf5()_info'] = info
+
+                except:
+                    info += f"Warning: Group `{group}` not found under path: {path}\n"
+            
+        
+    
+    return rois, params_rois, data, params_data
 
             
             
