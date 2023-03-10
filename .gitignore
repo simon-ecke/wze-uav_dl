@@ -1,0 +1,4 @@
+# ignore files or folders
+/runs
+/models
+/log_test
