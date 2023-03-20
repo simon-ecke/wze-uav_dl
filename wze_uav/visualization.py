@@ -32,6 +32,7 @@ def display_random_images(dataset: torch.utils.data.dataset.Dataset,
 
         # 7. Adjust image tensor shape for plotting: [color_channels, height, width] -> [color_channels, height, width]
         targ_image_adjust = targ_image.permute(2, 1, 0)
+ 
 
         # Plot adjusted samples
         plt.subplot(1, n, i+1)
