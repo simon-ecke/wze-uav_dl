@@ -1,8 +1,9 @@
 import torch
 from tqdm.auto import tqdm
 from typing import Dict, List, Tuple
-from torchmetrics.classification import MulticlassAccuracy, MulticlassPrecision, MulticlassRecall, MulticlassF1Score, MulticlassConfusionMatrix
+from torchmetrics.classification import MulticlassAccuracy, MulticlassPrecision, MulticlassRecall, MulticlassF1Score
 from torch.utils.tensorboard import SummaryWriter
+from wze_uav.utils2 import *
 
 
 # train step
@@ -65,6 +66,53 @@ def train_step(model: torch.nn.Module,
     return train_loss, train_precision, train_recall, train_f1_score
 
 #%%
+# validation step
+
+def val_step(model: torch.nn.Module, 
+              dataloader: torch.utils.data.DataLoader,
+              loss_fn: torch.nn.Module,
+              num_classes: int,
+              device: torch.device) -> Tuple[float, float]:
+    
+    # Put model in eval mode
+    model.eval() 
+    
+    # Setup validation loss and validation accuracy values
+    val_loss, val_precision, val_recall, val_f1_score = 0, 0, 0, 0
+    
+    # Turn on inference context manager
+    with torch.inference_mode():
+        # Loop through DataLoader batches
+        for batch, (X, y) in enumerate(dataloader):
+            # Send data to target device
+            X, y = X.to(device), y.to(device)
+    
+            # 1. Forward pass
+            y_pred = model(X)
+
+            # 2. Calculate and accumulate loss
+            loss = loss_fn(y_pred, y)
+            val_loss += loss.item()
+            
+            # Calculate and accumulate evaluation metrics            
+            pre_metrics = MulticlassPrecision(num_classes=num_classes, average='weighted').to(device)
+            val_precision += pre_metrics(y_pred, y)
+            
+            rec_metrics = MulticlassRecall(num_classes=num_classes, average='weighted').to(device)
+            val_recall += rec_metrics(y_pred, y)
+            
+            f1_metrics = MulticlassF1Score(num_classes=num_classes, average='weighted').to(device)
+            val_f1_score += f1_metrics(y_pred, y)
+             
+    # Adjust metrics to get average loss and accuracy per batch 
+    val_loss = val_loss / len(dataloader)
+    val_precision = val_precision / len(dataloader)
+    val_recall = val_recall / len(dataloader)
+    val_f1_score = val_f1_score / len(dataloader)
+   
+    return val_loss, val_recall, val_precision, val_f1_score
+
+
 # test step
 
 def test_step(model: torch.nn.Module, 
@@ -124,7 +172,7 @@ def train(model: torch.nn.Module,
           n_bands: int,
           batch_size: int,
           train_dataloader: torch.utils.data.DataLoader,
-          test_dataloader: torch.utils.data.DataLoader,
+          val_dataloader: torch.utils.data.DataLoader,
           optimizer: torch.optim.Optimizer,
           #scheduler: torch.optim.lr_scheduler,
           loss_fn: torch.nn.Module,
@@ -138,15 +186,13 @@ def train(model: torch.nn.Module,
     
     # 2. Create empty results dictionary
     results = {"train_loss": [],
-               "train_accuracy": [],
                "train_precision": [],
                "train_recall": [],
                "train_f1_score": [],
-               "test_loss": [],
-               "test_accuracy": [],
-               "test_precision": [],
-               "test_recall": [],
-               "test_f1_score": [] 
+               "val_loss": [],
+               "val_precision": [],
+               "val_recall": [],
+               "val_f1_score": [] 
               }
     
     # Make sure to put model on target device
@@ -163,11 +209,16 @@ def train(model: torch.nn.Module,
                                                                                           num_classes=num_classes,
                                                                                           device=device)
         
-        test_loss, test_precision, test_recall, test_f1_score = test_step(model=model,
-                                                                                    dataloader=test_dataloader,
+        val_loss, val_precision, val_recall, val_f1_score = val_step(model=model,
+                                                                                    dataloader=val_dataloader,
                                                                                     loss_fn=loss_fn,
                                                                                     num_classes=num_classes,
                                                                                     device=device)
+        
+        save_filepath = f"01_{epoch}_epochs.pth"
+        save_model(model=model,
+                   target_dir="models",
+                   model_name=save_filepath)
         
         
         # 4. Print out what's happening
@@ -177,10 +228,10 @@ def train(model: torch.nn.Module,
             f"Train precision: {train_precision:.4f} | "
             f"Train recall: {train_recall:.4f} | "
             f"Train f1score: {train_f1_score:.4f} \n"
-            f"Test loss: {test_loss:.4f} | "
-            f"Test precision: {test_precision:.4f} | "
-            f"Test recall: {test_recall:.4f} | "
-            f"Test f1score: {test_f1_score:.4f} \n"     
+            f"Val loss: {val_loss:.4f} | "
+            f"Val precision: {val_precision:.4f} | "
+            f"Val recall: {val_recall:.4f} | "
+            f"Val f1score: {val_f1_score:.4f} \n"     
         )
 
         # 5. Update results dictionary
@@ -188,31 +239,31 @@ def train(model: torch.nn.Module,
         results["train_precision"].append(train_precision)
         results["train_recall"].append(train_recall)
         results["train_f1_score"].append(train_f1_score)
-        results["test_loss"].append(test_loss)
-        results["test_precision"].append(test_precision)
-        results["test_recall"].append(test_recall)
-        results["test_f1_score"].append(test_f1_score)
+        results["val_loss"].append(val_loss)
+        results["val_precision"].append(val_precision)
+        results["val_recall"].append(val_recall)
+        results["val_f1_score"].append(val_f1_score)
         
         # 6. Add evaluation results to SummaryWriter
         if writer:
             writer.add_scalars(main_tag="Loss",
                                tag_scalar_dict={"train_loss": train_loss,
-                                                "test_loss": test_loss},
+                                                "val_loss": val_loss},
                                global_step=epoch)
 
             writer.add_scalars(main_tag="Precision",
                                tag_scalar_dict={"train_precision": train_precision,
-                                                "test_precision": test_precision},
+                                                "val_precision": val_precision},
                                global_step=epoch)
             
             writer.add_scalars(main_tag="Recall",
                                tag_scalar_dict={"train_recall": train_recall,
-                                                "test_recall": test_recall},
+                                                "val_recall": val_recall},
                                global_step=epoch)
             
             writer.add_scalars(main_tag="F1Score",
                                tag_scalar_dict={"train_f1_score": train_f1_score,
-                                                "test_f1_score": test_f1_score},
+                                                "val_f1_score": val_f1_score},
                                global_step=epoch)
             
         # Track the PyTorch model architecture

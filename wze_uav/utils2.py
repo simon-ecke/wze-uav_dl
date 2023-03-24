@@ -1,6 +1,9 @@
 
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from pathlib import Path
+
 
 def save_model(model: torch.nn.Module,
                target_dir: str,
@@ -26,6 +29,43 @@ def save_model(model: torch.nn.Module,
     model_save_path = target_dir_path / model_name
 
     # Save the model state_dict()
-    print(f"[INFO] Saving model to: {model_save_path}")
     torch.save(obj=model.state_dict(),
              f=model_save_path)
+    
+
+class FocalLoss(nn.Module):
+    def __init__(self, gamma=2, weight=None):
+        super().__init__()
+        self.gamma = gamma
+        self.weight = weight
+    
+    def forward(self, input, target):
+        # Compute the cross-entropy loss for each sample in the batch
+        ce_loss = F.cross_entropy(input, target, weight=self.weight, reduction='none')
+        pt = torch.exp(-ce_loss)
+        focal_loss = (1 - pt)**self.gamma * ce_loss
+        return torch.mean(focal_loss)
+    
+
+    
+class FocalLoss2(nn.Module):
+    def __init__(self, gamma=2, weight=None):
+        super().__init__()
+        self.gamma = gamma
+        self.weight = weight
+    
+    def forward(self, input, target):
+        # Compute the cross-entropy loss for each sample in the batch
+        ce_loss = F.cross_entropy(input, target, weight=self.weight, reduction='none')
+        
+        # Compute the softmax probabilities for each class
+        p = F.softmax(input, dim=1)
+        
+        # Compute the probability of the true class for each sample
+        pt = p.gather(1, target.view(-1, 1)).squeeze()
+        
+        # Compute the Focal Loss for each sample
+        focal_loss = (1 - pt)**self.gamma * ce_loss
+        
+        # Compute the mean Focal Loss for the batch
+        return torch.mean(focal_loss)

@@ -31,7 +31,7 @@ def create_writer(target_dir: str,
     
 
     # Get timestamp of current date (all experiments on certain day live in same folder)
-    timestamp = datetime.now().strftime("%Y-%m") # returns current date in YYYY-MM format
+    timestamp = datetime.now().strftime("%Y-%m-%d") # returns current date in YYYY-MM format
 
     if extra:
         # Create log directory path
