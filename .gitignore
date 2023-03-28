@@ -2,3 +2,6 @@
 /runs
 /models
 /log_test
+/effnet_b0
+/effnet_b2
+/effnet_b7

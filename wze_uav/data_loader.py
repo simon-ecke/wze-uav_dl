@@ -88,6 +88,44 @@ class CustomDataset3Classes(Dataset):
     def __init__(self, data, labels, class_names=List[str], species=None, kkl=None, transform=None):
         self.data = data
         #important: these are the original labels representing the needle or leafloss! They are changed below to 3 classes below!
+        self.labels = labels
+        self.species = species
+        self.kkl = kkl
+        self.class_names = class_names
+        self.transform = transform
+        self.labels = []
+        for label in labels:
+            if label <= 45: # healthy trees with labels 0 - 25 NBV
+                self.labels.append(0)
+            elif label > 45 and label <= 95: # stressed trees with labels 30 - 95 NBV
+                self.labels.append(1)
+            else: # dead trees with label 99-100 NBV
+                self.labels.append(2)
+
+        self.labels = torch.tensor(self.labels, dtype=torch.int64)
+    # overwrite __len__()
+    def __len__(self) -> int:
+        "Returns total number of samples"
+        return len(self.data)
+    
+    # overwrite __getitem__() -> returns image and label 
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, float]:
+        img = self.data[index]
+        label = self.labels[index]
+        label = label.squeeze(dim=0) # transform label into 1-dimensions
+        label = int(label)
+  
+        if self.transform:
+            return self.transform(img), label # returns image (transformed), label
+        else:
+            return img, label # returns image, label 
+  
+        
+
+class CustomDataset3Classes_v2(Dataset):
+    def __init__(self, data, labels, class_names=List[str], species=None, kkl=None, transform=None):
+        self.data = data
+        # important: these are the original labels representing the needle or leafloss! They are changed below to 3 classes below!
         self.labels = torch.from_numpy(labels)
         self.species = species
         self.kkl = kkl
@@ -100,24 +138,29 @@ class CustomDataset3Classes(Dataset):
         return len(self.data)
     
     # overwrite __getitem__() -> returns image and label 
-    def __getitem__(self, index: int) -> Tuple[torch.Tensor, float]:
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         img = self.data[index]
         label = self.labels[index]
         label = label.squeeze(dim=0) # transform label into 1-dimensions
         label = int(label)
         
-        #adjust labels to 3 classes
-        if label <= 45: # healthy trees with labels 0 - 25 NBV
+        # adjust labels to 3 classes
+        if label <= 40: # healthy trees with labels 0 - 25 NBV
             label = 0 
-        elif label > 45 and label <= 95: # stressed trees with labels 30 - 95 NBV
+        elif label > 40 and label <= 95: # stressed trees with labels 30 - 95 NBV
             label = 1
         else: # dead trees with label 99-100 NBV
             label = 2
-  
+        
+        # Convert label to one-hot
+        num_classes = 3
+        one_hot_label = torch.zeros(num_classes)
+        one_hot_label[label] = 1
+        
         if self.transform:
-            return self.transform(img), label # returns image (transformed), label
+            return self.transform(img), one_hot_label # returns image (transformed), one-hot label
         else:
-            return img, label # returns image, label        
+            return img, one_hot_label # returns image, one-hot label
         
 
 def hdf5_to_img_label(data_path, load_sets=None):
