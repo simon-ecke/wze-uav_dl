@@ -54,9 +54,9 @@ def train_step(model: torch.nn.Module,
         train_acc += ((y_pred_class == y).sum().item()/len(y_pred_class))
         y_pred_class = y_pred_class.detach().cpu().numpy() 
         y = y.detach().cpu().numpy()
-        train_precision += precision_score(y, y_pred_class, average='macro', zero_division=1, labels=[0,1,2])
-        train_recall += recall_score(y, y_pred_class, average='macro', zero_division=1, labels=[0,1,2])
-        train_f1_score += f1_score(y, y_pred_class, average='macro', zero_division=1, labels=[0,1,2])
+        train_precision += precision_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
+        train_recall += recall_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
+        train_f1_score += f1_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
         
         
         #train_precision += pre_metrics(y_pred_class, y_class)
@@ -120,9 +120,9 @@ def val_step(model: torch.nn.Module,
             val_acc += ((y_pred_class == y).sum().item()/len(y_pred_class))
             y_pred_class = y_pred_class.detach().cpu().numpy() 
             y = y.detach().cpu().numpy()
-            val_precision += precision_score(y, y_pred_class, average='macro', zero_division=1, labels=[0,1,2])
-            val_recall += recall_score(y, y_pred_class, average='macro', zero_division=1, labels=[0,1,2])
-            val_f1_score += f1_score(y, y_pred_class, average='macro', zero_division=1, labels=[0,1,2]) # if None -> , labels=labels (labels=np.array([0,1,2])
+            val_precision += precision_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
+            val_recall += recall_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
+            val_f1_score += f1_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2]) # if None -> , labels=labels (labels=np.array([0,1,2])
             
                         
             #val_precision += pre_metrics(y_pred_class, y_class)
@@ -189,9 +189,9 @@ def test_step(model: torch.nn.Module,
             test_acc += ((y_pred_class == y).sum().item()/len(y_pred_class))
             y_pred_class = y_pred_class.detach().cpu().numpy() 
             y = y.detach().cpu().numpy()
-            test_precision += precision_score(y, y_pred_class, average='macro', zero_division=1, labels=[0,1,2])
-            test_recall += recall_score(y, y_pred_class, average='macro', zero_division=1, labels=[0,1,2])
-            test_f1_score += f1_score(y, y_pred_class, average='macro', zero_division=1, labels=[0,1,2])
+            test_precision += precision_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
+            test_recall += recall_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
+            test_f1_score += f1_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
             
             #test_precision += pre_metrics(y_pred_class, y_class)
             ##

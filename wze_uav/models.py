@@ -165,3 +165,31 @@ def create_resnet152(output_shape: int, unfreeze: bool, device: torch.device):
     
     print(f"[INFO] Created new {model.name} model.")
     return model
+
+
+def create_densenet(output_shape: int, unfreeze: bool, device: torch.device):
+    # 1. Get the base mdoel with pretrained weights and send to target device
+    weights = torchvision.models.DenseNet201_Weights.DEFAULT
+    # get the transforms used to create the pretrained weights
+    auto_transforms = weights.transforms()
+   
+    # define model
+    model = torchvision.models.densenet201(weights=weights).to(device)
+    
+    # 2. Freeze/Unfreeze the base model layers
+    for param in model.parameters():
+        param.requires_grad = unfreeze
+    
+    # 3. Set the seeds
+    set_seeds()
+    
+    # 4. Change the classifier head
+    
+    model.fc = torch.nn.Linear(in_features=model.fc.in_features,
+                         out_features=output_shape).to(device)
+    
+    # 5. Give the model a name
+    model.name = "resnet152"
+    
+    print(f"[INFO] Created new {model.name} model.")
+    return model

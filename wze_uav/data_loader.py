@@ -5,6 +5,7 @@ import findatree_roi.exporter as exporter
 import numpy as np
 from torch.utils.data import Dataset
 from typing import Dict, List, Tuple
+from torch.utils.data import WeightedRandomSampler
 
 class CustomDataset5Classes(Dataset):
     def __init__(self, data, labels, class_names=List[str], species=None, kkl=None, transform=None):
@@ -228,3 +229,32 @@ def hdf5_to_img_label(data_path, load_sets=None):
         
     del d, s, l, k, b, rois, params_rois, data, params_data, crowns_human
     return image_set, label_set, species_set, kkl_set, bk_set
+
+
+def data_sampler(labels_tensor: torch.Tensor, class_names: List[str]):
+    
+    # convert the label tensor to a list
+    labels_list = labels_tensor.tolist()
+    
+    # count the number of samples per class
+    class_sample_counts = [labels_list.count(i) for i in range(len(class_names))]
+    
+    # compute the effective number of samples
+    total_samples = sum(class_sample_counts)
+    effective_num = [(1.0 - (count / total_samples)) / (len(class_names) - 1) for count in class_sample_counts]
+    
+    # calculate the weight of each class as inverse of frequency
+    class_weights = torch.FloatTensor(effective_num)
+    class_weights /= torch.sum(class_weights)
+    
+    # create a list of weights for each data sample
+    train_weights = [class_weights[label] for label in labels_list]
+    
+    # create a sampler using the weights
+    sampler = WeightedRandomSampler(train_weights, len(train_dataset), replacement=True)
+    
+    print(f"Class sample counts: {class_sample_counts}")
+    print(f"Effective num: {effective_num}")
+    print(f"Class weights: {class_weights}")
+    
+    return sampler
