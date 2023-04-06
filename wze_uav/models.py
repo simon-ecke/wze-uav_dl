@@ -1,14 +1,15 @@
 import torch
 import torchvision
+from torch import nn
 
-# Get pre-trained model -> Efficientnet
+
 
 # Set seeds
-def set_seeds(seed: int=0):
+def set_seeds(seed: int=42):
     """Sets random sets for torch operations.
 
     Args:
-        seed (int, optional): Random seed to set. Defaults to 0.
+        seed (int, optional): Random seed to set. Defaults to 42.
     """
     # Set the seed for general torch operations
     torch.manual_seed(seed)
@@ -33,9 +34,9 @@ def create_effnetb0(output_shape: int, unfreeze: bool, dropout_rate: float, devi
     set_seeds()
     
     # 4. Change the classifier head
-    model.classifier = torch.nn.Sequential(
-        torch.nn.Dropout(p=dropout_rate, inplace=True),
-        torch.nn.Linear(in_features=1280, # 2048 (b5), 2560 (b7)
+    model.classifier = nn.Sequential(
+        nn.Dropout(p=dropout_rate, inplace=True),
+        nn.Linear(in_features=1280, # 2048 (b5), 2560 (b7)
                         out_features=output_shape, # same number of output units as our number of classes
                         bias=True)).to(device)
 
@@ -64,9 +65,9 @@ def create_effnetb2(output_shape: int, unfreeze: bool, dropout_rate: float, devi
     set_seeds()
     
     # 4. Change the classifier head
-    model.classifier = torch.nn.Sequential(
-        torch.nn.Dropout(p=dropout_rate, inplace=True),
-        torch.nn.Linear(in_features=1408, # 2048 (b5), 2560 (b7)
+    model.classifier = nn.Sequential(
+        nn.Dropout(p=dropout_rate, inplace=True),
+        nn.Linear(in_features=1408, # 2048 (b5), 2560 (b7)
                         out_features=output_shape, # same number of output units as our number of classes
                         bias=True)).to(device)
 
@@ -95,9 +96,9 @@ def create_effnetb7(output_shape: int, unfreeze: bool, dropout_rate: float, devi
     set_seeds()
     
     # 4. Change the classifier head
-    model.classifier = torch.nn.Sequential(
-        torch.nn.Dropout(p=dropout_rate, inplace=True),
-        torch.nn.Linear(in_features=2560, # 2048 (b5), 2560 (b7)
+    model.classifier = nn.Sequential(
+        nn.Dropout(p=dropout_rate, inplace=True),
+        nn.Linear(in_features=2560, # 2048 (b5), 2560 (b7)
                         out_features=output_shape, # same number of output units as our number of classes
                         bias=True)).to(device)
 
@@ -126,12 +127,12 @@ def create_effnet_v2_l(output_shape: int, unfreeze: bool, dropout_rate: float, d
     set_seeds()
     
     # 4. Change the classifier head
-    model.classifier = torch.nn.Sequential(
-        torch.nn.Dropout(p=dropout_rate, inplace=True),
-        torch.nn.Linear(in_features=1280, # 2048 (b5), 2560 (b7)
+    model.classifier = nn.Sequential(
+        nn.Dropout(p=dropout_rate, inplace=True),
+        nn.Linear(in_features=1280, 
                         out_features=output_shape, # same number of output units as our number of classes
                         bias=True)).to(device)
-
+    
     # 5. Give the model a name
     model.name = "effnet_v2_l"
     
@@ -139,7 +140,7 @@ def create_effnet_v2_l(output_shape: int, unfreeze: bool, dropout_rate: float, d
     return model
 
 
-def create_resnet152(output_shape: int, unfreeze: bool, device: torch.device):
+def create_resnet152(output_shape: int, unfreeze: bool, dropout_rate: float, device: torch.device):
     # 1. Get the base mdoel with pretrained weights and send to target device
     weights = torchvision.models.ResNet152_Weights.DEFAULT
     # get the transforms used to create the pretrained weights
@@ -155,10 +156,11 @@ def create_resnet152(output_shape: int, unfreeze: bool, device: torch.device):
     # 3. Set the seeds
     set_seeds()
     
-    # 4. Change the classifier head
-    
-    model.fc = torch.nn.Linear(in_features=model.fc.in_features,
-                         out_features=output_shape).to(device)
+    # 4. Change the classifier head and add dropout
+    model.fc = nn.Sequential(nn.Dropout(p=dropout_rate),
+                             nn.Linear(in_features=model.fc.in_features,
+                                       out_features=output_shape)).to(device)
+
     
     # 5. Give the model a name
     model.name = "resnet152"
@@ -185,7 +187,7 @@ def create_densenet(output_shape: int, unfreeze: bool, device: torch.device):
     
     # 4. Change the classifier head
     
-    model.fc = torch.nn.Linear(in_features=model.fc.in_features,
+    model.fc = nn.Linear(in_features=model.fc.in_features,
                          out_features=output_shape).to(device)
     
     # 5. Give the model a name

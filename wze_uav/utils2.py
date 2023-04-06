@@ -1,34 +1,39 @@
 
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from pathlib import Path
+from torch.optim.lr_scheduler import _LRScheduler
 
 
 
 
 def save_model(model: torch.nn.Module,
                target_dir: str,
-               model_name: str):
+               model_name: str,
+               file_name: str):
     """Saves a PyTorch model to a target directory.
     Args:
     model: A target PyTorch model to save.
     target_dir: A directory for saving the model to.
-    model_name: A filename for the saved model. Should include
+    model_name: A folder inside the target_dir named after the model name.
+    file_name: A filename for the saved model. Should include
       either ".pth" or ".pt" as the file extension.
     Example usage:
     save_model(model=model_0,
                target_dir="models",
-               model_name="05_going_modular_tingvgg_model.pth")
+               model_name="efficientnet_b0",
+               file_name="01_model_32batch.pth")
     """
     # Create target directory
-    target_dir_path = Path(target_dir)
+    target_dir_path = Path(f"{target_dir}/{model_name}")
     target_dir_path.mkdir(parents=True,
                         exist_ok=True)
-
+    
     # Create model save path
-    assert model_name.endswith(".pth") or model_name.endswith(".pt"), "model_name should end with '.pt' or '.pth'"
-    model_save_path = target_dir_path / model_name
+    assert file_name.endswith(".pth") or file_name.endswith(".pt"), "model_name should end with '.pt' or '.pth'"
+    model_save_path = target_dir_path / file_name
 
     # Save the model state_dict()
     torch.save(obj=model.state_dict(),
@@ -108,3 +113,29 @@ class FocalLoss2(nn.Module):
             return loss.mean()
         else:
             return loss.sum()
+
+
+class CustomExponentialLR(_LRScheduler):
+    def __init__(self, optimizer, gamma, min_lr, last_epoch=-1):
+        self.gamma = gamma
+        self.min_lr = min_lr
+        super(CustomExponentialLR, self).__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        return [max(base_lr * math.pow(self.gamma, self.last_epoch), self.min_lr)
+                for base_lr in self.base_lrs]
+    
+    
+class CustomStepLR(_LRScheduler):
+    def __init__(self, optimizer, step_size, gamma=0.1, last_epoch=-1, min_lr=0):
+        self.step_size = step_size
+        self.gamma = gamma
+        self.min_lr = min_lr
+        super(CustomStepLR, self).__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        if self.last_epoch < self.step_size:
+            return [base_lr for base_lr in self.base_lrs]
+        else:
+            lr = [base_lr * self.gamma ** (self.last_epoch // self.step_size) for base_lr in self.base_lrs]
+            return [max(base_lr, self.min_lr) for base_lr in lr]

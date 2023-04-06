@@ -2,7 +2,6 @@ import torch
 from tqdm.auto import tqdm
 from typing import Dict, List, Tuple
 from torchmetrics.classification import MulticlassAccuracy, MulticlassPrecision, MulticlassRecall, MulticlassF1Score, MulticlassCohenKappa
-from sklearn.metrics import precision_score, recall_score, f1_score
 from torch.utils.tensorboard import SummaryWriter
 from wze_uav.utils2 import *
 import numpy as np
@@ -18,68 +17,62 @@ def train_step(model: torch.nn.Module,
     # Put model in train mode
     model.train()
     
-    
     # Setup train loss and other evaluation metrics
-    train_loss, train_precision, train_recall, train_f1_score, train_acc = 0, 0, 0, 0, 0
+    train_loss, train_precision, train_recall, train_f1_score, train_acc, train_kappa = 0, 0, 0, 0, 0, 0
     
     # set up metrics
-    #pre_metrics = MulticlassPrecision(num_classes=num_classes, average='macro').to(device)
-    #rec_metrics = MulticlassRecall(num_classes=num_classes, average='macro').to(device)
-    #f1_metrics = MulticlassF1Score(num_classes=num_classes, average='macro').to(device)
-    #kappa_metrics = MulticlassCohenKappa(num_classes=num_classes).to(device)
-    labels = np.array([0,1,2])
+    pre_metrics = MulticlassPrecision(num_classes=num_classes, average='macro').to(device)
+    rec_metrics = MulticlassRecall(num_classes=num_classes, average='macro').to(device)
+    f1_metrics = MulticlassF1Score(num_classes=num_classes, average='macro').to(device)
+    acc_metrics = MulticlassAccuracy(num_classes=num_classes, average='micro').to(device)
+    kappa_metrics = MulticlassCohenKappa(num_classes=num_classes).to(device)
+    
     # Loop through data loader data batches
     for batch, (X, y) in enumerate(dataloader):
         # Send data to target device
         X, y = X.to(device), y.to(device)
-        # 1. Forward pass
+        
+        # Forward pass
         y_pred = model(X)
-        # 2. Calculate, define weights to account for imbalance and accumulate balanced loss
+        
+        # Calculate, define weights to account for imbalance and accumulate balanced loss
         loss = loss_fn(y_pred, y)
         train_loss += loss.item()
-        #loss_weighted = loss_fn(y_pred, y)
-        #train_loss_weighted += loss_weighted.item()
-        # 3. Optimizer zero grad
+        
+        # Optimizer zero grad
         optimizer.zero_grad()
-        # 4. Loss backward
+        
+        # Loss backward
         loss.backward()
-        #loss_weighted.backward()
-        # 5. Optimizer step
+        
+        # Optimizer step
         optimizer.step()
         
-        # get the class predictions
-        y_pred_class = torch.argmax(torch.softmax(y_pred, dim=1), dim=1)
-        
-        # Calculate and accumulate accuracy metric across all batches
-        train_acc += ((y_pred_class == y).sum().item()/len(y_pred_class))
-        y_pred_class = y_pred_class.detach().cpu().numpy() 
-        y = y.detach().cpu().numpy()
-        train_precision += precision_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
-        train_recall += recall_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
-        train_f1_score += f1_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
-        
-        
-        #train_precision += pre_metrics(y_pred_class, y_class)
-        #train_recall += rec_metrics(y_pred_class, y_class)
-        #train_f1_score += f1_metrics(y_pred_class, y_class)
-        #train_kappa += kappa_metrics(y_pred_class,y_class)
-        #
-        #y_pred = y_pred.argmax(dim=1).detach().cpu().numpy() 
-        #y = y.detach().cpu().numpy()
-        #train_precision += precision_score(y, y_pred, average='macro', zero_division=1)
-        #train_recall += recall_score(y, y_pred, average='macro', zero_division=1)
-        #train_f1_score += f1_score(y, y_pred, average='macro', zero_division=1)
+        # Calculate and accumulate evaluation metrics across all batches
+        pre_metrics.update(y_pred, y)
+        rec_metrics.update(y_pred, y)
+        f1_metrics.update(y_pred, y)
+        acc_metrics.update(y_pred, y)
+        kappa_metrics.update(y_pred, y)
           
-    # Adjust metrics to get average loss and accuracy per batch 
+    # Adjust metrics to get average loss and evaluation metrics per epoch 
     train_loss = train_loss / len(dataloader)
-    train_precision = train_precision / len(dataloader)
-    train_recall = train_recall / len(dataloader)
-    train_f1_score = train_f1_score / len(dataloader)
-    train_acc = train_acc / len(dataloader)
+    train_precision = pre_metrics.compute().item()
+    train_recall = rec_metrics.compute().item()
+    train_f1_score = f1_metrics.compute().item()
+    train_acc = acc_metrics.compute().item()
+    train_kappa = kappa_metrics.compute().item()
+    
+    # reset metrics for next epoch
+    pre_metrics.reset()
+    rec_metrics.reset()
+    f1_metrics.reset()
+    acc_metrics.reset()
+    kappa_metrics.reset()
    
-    return train_loss, train_precision, train_recall, train_f1_score, train_acc
+    return train_loss, train_precision, train_recall, train_f1_score, train_acc, train_kappa
 
-#%%
+
 # validation step
 
 def val_step(model: torch.nn.Module, 
@@ -92,13 +85,15 @@ def val_step(model: torch.nn.Module,
     model.eval() 
     
     # Setup validation loss and validation accuracy values
-    val_loss, val_precision, val_recall, val_f1_score, val_acc = 0, 0, 0, 0, 0
+    val_loss, val_precision, val_recall, val_f1_score, val_acc, val_kappa = 0, 0, 0, 0, 0, 0
     
-    #pre_metrics = MulticlassPrecision(num_classes=num_classes, average='macro').to(device)
-    #rec_metrics = MulticlassRecall(num_classes=num_classes, average='macro').to(device)
-    #f1_metrics = MulticlassF1Score(num_classes=num_classes, average='macro').to(device)
-    #kappa_metrics = MulticlassCohenKappa(num_classes=num_classes).to(device)
-    labels = np.array([0,1,2])
+    # set up metrics
+    pre_metrics = MulticlassPrecision(num_classes=num_classes, average='macro').to(device)
+    rec_metrics = MulticlassRecall(num_classes=num_classes, average='macro').to(device)
+    f1_metrics = MulticlassF1Score(num_classes=num_classes, average='macro').to(device)
+    acc_metrics = MulticlassAccuracy(num_classes=num_classes, average='micro').to(device)
+    kappa_metrics = MulticlassCohenKappa(num_classes=num_classes).to(device)
+   
     # Turn on inference context manager
     with torch.inference_mode():
         # Loop through DataLoader batches
@@ -106,54 +101,43 @@ def val_step(model: torch.nn.Module,
             # Send data to target device
             X, y = X.to(device), y.to(device)
     
-            # 1. Forward pass
-            y_pred_logits = model(X)
+            # Forward pass
+            y_pred = model(X)
 
-            # 2. Calculate and accumulate loss
-            loss = loss_fn(y_pred_logits, y)
+            # Calculate and accumulate loss
+            loss = loss_fn(y_pred, y)
             val_loss += loss.item()
             
-            # get predicted classes
-            y_pred_class = y_pred_logits.argmax(dim=1)
+            # Calculate and accumulate evaluation metrics across all batches
+            pre_metrics.update(y_pred, y)
+            rec_metrics.update(y_pred, y)
+            f1_metrics.update(y_pred, y)
+            acc_metrics.update(y_pred, y)
+            kappa_metrics.update(y_pred, y)
             
-            # Calculate and accumulate evaluation metrics
-            val_acc += ((y_pred_class == y).sum().item()/len(y_pred_class))
-            y_pred_class = y_pred_class.detach().cpu().numpy() 
-            y = y.detach().cpu().numpy()
-            val_precision += precision_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
-            val_recall += recall_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
-            val_f1_score += f1_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2]) # if None -> , labels=labels (labels=np.array([0,1,2])
-            
-                        
-            #val_precision += pre_metrics(y_pred_class, y_class)
-            ##
-            #val_recall += rec_metrics(y_pred_class, y_class)
-            ##
-            #val_f1_score += f1_metrics(y_pred_class, y_class)
-            ##
-            #val_kappa += kappa_metrics(y_pred_class, y_class)
-            
-            #y_pred = y_pred.argmax(dim=1).detach().cpu().numpy() 
-            #y = y.detach().cpu().numpy()
-            #val_precision += precision_score(y, y_pred, average='macro', zero_division=1)
-            #val_recall += recall_score(y, y_pred, average='macro', zero_division=1)
-            #val_f1_score += f1_score(y, y_pred, average='macro', zero_division=1)
-             
-    # Adjust metrics to get average loss and accuracy per batch 
+    # Adjust metrics to get average loss and evaluation metrics per epoch        
     val_loss = val_loss / len(dataloader)
-    val_precision = val_precision / len(dataloader)
-    val_recall = val_recall / len(dataloader)
-    val_f1_score = val_f1_score / len(dataloader)
-    val_acc = val_acc / len(dataloader)
+    val_precision = pre_metrics.compute().item()
+    val_recall = rec_metrics.compute().item()
+    val_f1_score = f1_metrics.compute().item()
+    val_acc = acc_metrics.compute().item()
+    val_kappa = kappa_metrics.compute().item()
     
+
+    # reset metrics for next epoch
+    pre_metrics.reset()
+    rec_metrics.reset()
+    f1_metrics.reset()
+    acc_metrics.reset()
+    kappa_metrics.reset()
    
-    return val_loss, val_recall, val_precision, val_f1_score, val_acc
+    return val_loss, val_precision, val_recall, val_f1_score, val_acc, val_kappa
 
 
 # test step
 
-def test_step(model: torch.nn.Module, 
-              dataloader: torch.utils.data.DataLoader,
+def make_predictions(model: torch.nn.Module, 
+              test_dataloader: torch.utils.data.DataLoader,
               loss_fn: torch.nn.Module,
               num_classes: int,
               device: torch.device) -> Tuple[float, float]:
@@ -162,60 +146,62 @@ def test_step(model: torch.nn.Module,
     model.eval() 
     
     # Setup test loss and test accuracy values
-    test_loss, test_precision, test_recall, test_f1_score, test_acc = 0, 0, 0, 0, 0
+    test_loss, test_precision, test_recall, test_f1_score, test_acc, test_kappa = 0, 0, 0, 0, 0, 0
     
-    #pre_metrics = MulticlassPrecision(num_classes=num_classes, average='macro').to(device)
-    #rec_metrics = MulticlassRecall(num_classes=num_classes, average='macro').to(device)
-    #f1_metrics = MulticlassF1Score(num_classes=num_classes, average='macro').to(device)
-    #kappa_metrics = MulticlassCohenKappa(num_classes=num_classes).to(device)
+    # set up metrics
+    pre_metrics = MulticlassPrecision(num_classes=num_classes, average='macro').to(device)
+    rec_metrics = MulticlassRecall(num_classes=num_classes, average='macro').to(device)
+    f1_metrics = MulticlassF1Score(num_classes=num_classes, average='macro').to(device)
+    acc_metrics = MulticlassAccuracy(num_classes=num_classes, average='micro').to(device)
+    kappa_metrics = MulticlassCohenKappa(num_classes=num_classes).to(device)
+    
+    # create lists to collect predictions and labels for confusion matrix
+    y_preds = []
+    y_labels = []
+    
     # Turn on inference context manager
     with torch.inference_mode():
-        # Loop through DataLoader batches
-        for batch, (X, y) in enumerate(dataloader):
+        # Loop through the whole test DataLoader at once
+        for X, y in tqdm(test_dataloader, desc="Making predictions"):     
             # Send data to target device
             X, y = X.to(device), y.to(device)
     
             # 1. Forward pass
-            y_pred_logits = model(X)
+            y_pred = model(X)
 
             # 2. Calculate and accumulate loss
-            loss = loss_fn(y_pred_logits, y)
+            loss = loss_fn(y_pred, y)
             test_loss += loss.item()
             
-            # get predicted classes
-            y_pred_class = y_pred_logits.argmax(dim=1)
+            # get prediction labels
+            y_pred_class = y_pred.argmax(dim=1)
             
-            # Calculate and accumulate evaluation metrics    
-            test_acc += ((y_pred_class == y).sum().item()/len(y_pred_class))
-            y_pred_class = y_pred_class.detach().cpu().numpy() 
-            y = y.detach().cpu().numpy()
-            test_precision += precision_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
-            test_recall += recall_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
-            test_f1_score += f1_score(y, y_pred_class, average='macro', zero_division=0, labels=[0,1,2])
+            # collect all labels and predictions and put them on cpu
+            y_preds.append(y_pred_class.detach().cpu())
+            y_labels.append(y.detach().cpu())
             
-            #test_precision += pre_metrics(y_pred_class, y_class)
-            ##
-            #test_recall += rec_metrics(y_pred_class, y_class)
-            ##
-            #test_f1_score += f1_metrics(y_pred_class, y_class)
-            ##
-            #test_kappa += kappa_metrics(y_pred_class, y_class)
-            
-            #y_pred = y_pred.argmax(dim=1).detach().cpu().numpy() 
-            #y = y.detach().cpu().numpy()
-            #test_precision += precision_score(y, y_pred, average='macro', zero_division=1)
-            #test_recall += recall_score(y, y_pred, average='macro', zero_division=1)
-            #test_f1_score += f1_score(y, y_pred, average='macro', zero_division=1)
-             
-    # Adjust metrics to get average loss and accuracy per batch 
-    test_loss = test_loss / len(dataloader)
-    test_precision = test_precision / len(dataloader)
-    test_recall = test_recall / len(dataloader)
-    test_f1_score = test_f1_score / len(dataloader)
-    test_acc = test_acc / len(dataloader)
+            # Calculate and accumulate evaluation metrics across all batches
+            pre_metrics.update(y_pred, y)
+            rec_metrics.update(y_pred, y)
+            f1_metrics.update(y_pred, y)
+            acc_metrics.update(y_pred, y)
+            kappa_metrics.update(y_pred, y)
+                     
+    # concatenate prediction and label tensors and covert them to numpy arrays for later use (sklearn confusion matrix)
+    y_preds_tensor = torch.cat(y_preds)
+    y_labels_tensor = torch.cat(y_labels)
+    y_preds = y_preds_tensor.numpy()
+    y_labels = y_labels_tensor.numpy()
+    
+    # Adjust metrics to get average loss and evaluation metrics per epoch   
+    test_loss = test_loss / len(test_dataloader)
+    test_precision = pre_metrics.compute().item()
+    test_recall = rec_metrics.compute().item()
+    test_f1_score = f1_metrics.compute().item()
+    test_acc = acc_metrics.compute().item()
+    test_kappa = kappa_metrics.compute().item()
    
-   
-    return test_loss, test_recall, test_precision, test_f1_score, test_acc
+    return test_loss, test_precision, test_recall, test_f1_score, test_acc, test_kappa, y_preds, y_labels
 
 
 # define train()
@@ -233,85 +219,106 @@ def train(model: torch.nn.Module,
           loss_fn: torch.nn.Module,
           num_classes: int,
           epochs: int,
+          experiment_num: int,
           device: torch.device,
-          writer: torch.utils.tensorboard.writer.SummaryWriter) -> Dict[str, List]:
+          writer: torch.utils.tensorboard.writer.SummaryWriter,
+          early_stop_patience: int = 5) -> Dict[str, List]:
     
-   
-        
+    # Initialize early stopping variables
+    best_val_loss = float('inf')
+    best_f1_score = 0.0
+    epochs_since_improvement = 0      
     
-    # 2. Create empty results dictionary
+    # Create empty results dictionary
     results = {"train_loss": [],
                "train_precision": [],
                "train_recall": [],
                "train_f1_score": [],
                "train_acc": [],
+               "train_kappa": [],
                "val_loss": [],
                "val_precision": [],
                "val_recall": [],
                "val_f1_score": [],
                "val_acc": [],
+               "val_kappa": [],
               }
     
     # Make sure to put model on target device
     model.to(device)
     
-    # 3. Loop through training and testing steps for a number of epochs
-    #_weighted, train_precision, train_recall, train_f1_score 
+    # Loop through training and testing steps for a number of epochs
     for epoch in tqdm(range(epochs)):
-        train_loss, train_precision, train_recall, train_f1_score, train_acc = train_step(model=model,
+        train_loss, train_precision, train_recall, train_f1_score, train_acc, train_kappa = train_step(model=model,
                                                                                           dataloader=train_dataloader,
                                                                                           loss_fn=loss_fn,
                                                                                           optimizer=optimizer,
                                                                                           num_classes=num_classes,
                                                                                           device=device)
         
-        val_loss, val_precision, val_recall, val_f1_score, val_acc = val_step(model=model,
+        val_loss, val_precision, val_recall, val_f1_score, val_acc, val_kappa = val_step(model=model,
                                                                                     dataloader=val_dataloader,
                                                                                     loss_fn=loss_fn,
                                                                                     num_classes=num_classes,
                                                                                     device=device)
         
-        # set scheduler for aligned lr
-        
+        # set scheduler for decreasing learning rate
         current_lr = optimizer.param_groups[0]['lr']
-        print(f"Learning rate: {current_lr}")
         lr_scheduler.step()
+        # Check if the learning rate has reached the minimum value
+        #if scheduler.get_lr()[0] <= 1e-6:
+        #    break
         
         
-        save_filepath = f"01_{epoch+1}_epochs.pth"
-        save_model(model=model,
-                   target_dir=model_name,
-                   model_name=save_filepath)
+        if val_loss < best_val_loss or val_f1_score > best_f1_score:
+            if val_loss < best_val_loss:
+                save_filepath = f"{experiment_num}_{model_name}_{epoch+1}_epochs.pth"
+                best_val_loss = val_loss
+            if val_f1_score > best_f1_score:
+                save_filepath = f"{experiment_num}_{model_name}_{epoch+1}_epochs.pth"
+                best_f1_score = val_f1_score
+            save_model(model=model,
+                       target_dir='models',
+                       model_name=model_name,
+                       file_name=save_filepath)
+            best_epoch = epoch
+            epochs_since_improvement = 0
+        else:
+            epochs_since_improvement += 1
         
-        
-        # 4. Print out what's happening
+        # Print out what's happening
         print(
             f"Epoch: {epoch+1} \n"
+            f"Learning rate: {current_lr}\n"
             f"Train loss: {train_loss:.4f} | "
             f"Train precision: {train_precision:.4f} | "
             f"Train recall: {train_recall:.4f} | "
             f"Train f1score: {train_f1_score:.4f} | "
-            f"Train acc: {train_acc:.4f} \n"
+            f"Train acc: {train_acc:.4f} | "
+            f"Train kappa: {train_kappa:.4f} \n"
             f"Val loss: {val_loss:.4f} | "
             f"Val precision: {val_precision:.4f} | "
             f"Val recall: {val_recall:.4f} | "
             f"Val f1score: {val_f1_score:.4f} | "
-            f"Val acc: {val_acc:.4f} \n" 
+            f"Val acc: {val_acc:.4f} | " 
+            f"Val kappa: {val_kappa:.4f} \n" 
         )
 
-        # 5. Update results dictionary
+        # Update results dictionary
         results["train_loss"].append(train_loss)
         results["train_precision"].append(train_precision)
         results["train_recall"].append(train_recall)
         results["train_f1_score"].append(train_f1_score)
         results["train_acc"].append(train_acc)
+        results["train_kappa"].append(train_kappa)
         results["val_loss"].append(val_loss)
         results["val_precision"].append(val_precision)
         results["val_recall"].append(val_recall)
         results["val_f1_score"].append(val_f1_score)
         results["val_acc"].append(val_acc)
+        results["val_kappa"].append(val_kappa)
         
-        # 6. Add evaluation results to SummaryWriter
+        # Add evaluation results to SummaryWriter
         if writer:
             writer.add_scalars(main_tag="Loss",
                                tag_scalar_dict={"train_loss": train_loss,
@@ -338,6 +345,11 @@ def train(model: torch.nn.Module,
                                                 "val_accuracy": val_acc},
                                global_step=epoch)
             
+            writer.add_scalars(main_tag="Cohen Kappa",
+                               tag_scalar_dict={"train_kappa": train_kappa,
+                                                "val_kappa": val_kappa},
+                               global_step=epoch)
+            
         # Track the PyTorch model architecture
             writer.add_graph(model=model,
                              # Pass in an example input
@@ -348,5 +360,11 @@ def train(model: torch.nn.Module,
         
         else:
             pass
-    # 6. Return the filled results at the end of the epochs
+        
+        # Early stopping if the validation loss hasn't improved in `early_stop_patience` epochs
+        if epochs_since_improvement == early_stop_patience:
+            print(f"Early stopping after epoch {epoch+1}")
+            break
+            
+    # Return the filled results at the end of the epochs
     return results
