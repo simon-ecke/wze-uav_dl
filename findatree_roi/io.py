@@ -1,3 +1,7 @@
+# Author: Florian Stehr
+# Code Repository: https://github.com/FlorianStehr/findatree
+#
+
 from typing import Dict, List, Tuple
 import importlib
 import os

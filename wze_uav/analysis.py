@@ -21,23 +21,3 @@ def make_predictions(model: torch.nn.Module,
     # Concatenate list of predictions into a tensor
     y_pred_tensor = torch.cat(y_preds)
     return y_pred_tensor
-
-
-def val_labels_3classes(test_dataset: torch.utils.data.dataset.Dataset):
-    torch_tensor = test_dataset.labels
-    torch_tensor = torch_tensor.squeeze(dim=1)
-    np_arr = torch_tensor.cpu().detach().numpy()
-    label_list = []
-    for i in np_arr:
-        if i <= 25:
-            label = 0
-            label_list.append(label)
-        elif i > 25 and i <= 99:
-            label = 1
-            label_list.append(label)
-        else:
-            label = 2
-            label_list.append(label)
-    array_labels = np.array(label_list)
-    val_labels = torch.from_numpy(array_labels)
-    return val_labels

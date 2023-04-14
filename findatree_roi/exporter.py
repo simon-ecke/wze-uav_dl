@@ -1,5 +1,11 @@
 """ Module to export channels, crowns as rois into .hdf5 files
 """
+
+# Author: Florian Stehr
+# Code Repository: https://github.com/FlorianStehr/findatree
+#
+# Modification: modified rois_to_hdf5 function (Simon Ecke) 
+
 import os
 from typing import Dict, List, Tuple, Union
 import numpy as np
@@ -291,6 +297,7 @@ def load_rois_from_hdf5(
     return rois, params_rois
 
 
+# modified load_rois_from_hdf5 function
 def load_rois_from_hdf5_v2(
     path: str,
     groups: List = ['channels', 'crowns_human', 'crowns_water'],

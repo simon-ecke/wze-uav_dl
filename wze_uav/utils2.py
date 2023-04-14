@@ -1,3 +1,10 @@
+# Author: Simon Ecke
+# Date: 01.04.2023
+# Code Repository: https://github.com/simon-ecke/wze-uav_dl
+#
+# Description: This code defines and implements several functions and classes for deep learning using PyTorch. It includes a modified version of the FocalLoss function, a function for saving trained models, and custom learning rate schedulers.
+#
+# The basic focal loss function originates from https://github.com/clcarwin/focal_loss_pytorch 
 
 import math
 import torch
@@ -7,8 +14,7 @@ from pathlib import Path
 from torch.optim.lr_scheduler import _LRScheduler
 
 
-
-
+# save trained model to defined directory
 def save_model(model: torch.nn.Module,
                target_dir: str,
                model_name: str,
@@ -41,8 +47,6 @@ def save_model(model: torch.nn.Module,
      
     
 # from https://github.com/clcarwin/focal_loss_pytorch 
-
-
 class FocalLoss(nn.Module):
     def __init__(self, weights=0, alpha=None, size_average=True):
         super(FocalLoss, self).__init__()

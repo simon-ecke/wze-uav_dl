@@ -1,3 +1,9 @@
+# Author: Daniel Bourke
+# Code Repository: https://github.com/mrdbourke/pytorch-deep-learning
+# 
+# Description: Visualizing random images from PyTorch Datasets.
+#
+
 # 1. Take in a Dataset as well as a list of class names
 from typing import Dict, List, Tuple
 import torch

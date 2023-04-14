@@ -4,7 +4,6 @@
 
 # Author: lukemelas (github username)
 # Github repo: https://github.com/lukemelas/EfficientNet-PyTorch
-# With adjustments and added comments by workingcoder (github username).
 
 import re
 import math
