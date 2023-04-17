@@ -13,9 +13,6 @@ from wze_uav.utils2 import *
 import numpy as np
 import wandb
 
-#wandb.login()
-#wandb.init(project='wze-uav', entity='simon-ecke')
-
 
 # train step
 def train_step(model: torch.nn.Module,
@@ -254,23 +251,28 @@ def train(model: torch.nn.Module,
         # Log metrics to wandb for the current fold and epoch
         wandb.config.batch_size = batch_size
         
-        wandb.log({'fold': experiment_num, 'epoch': epoch, 'train_loss': train_loss, 'train_f1_score': train_f1_score,
+        wandb.log({'train_loss': train_loss, 'train_f1_score': train_f1_score,
                    'val_loss': val_loss, 'val_f1_score': val_f1_score, 'learning_rate': current_lr})
         
         # change learning rate according to the scheduler
         lr_scheduler.step()       
         
-        if val_loss < best_val_loss or val_f1_score > best_f1_score:
-            if val_loss < best_val_loss:
-                save_filepath = f"{experiment_num}_{model_name}_{epoch+1}_epochs.pth"
-                best_val_loss = val_loss
-            if val_f1_score > best_f1_score:
-                save_filepath = f"{experiment_num}_{model_name}_{epoch+1}_epochs.pth"
-                best_f1_score = val_f1_score
-            save_model(model=model,
+        # save model every epoch
+        save_filepath = f"{experiment_num}_{model_name}_{epoch+1}_epochs.pth"
+        save_model(model=model,
                        target_dir='models',
                        model_name=model_name,
                        file_name=save_filepath)
+        
+        # possibility to save model depending on certain conditions
+        if val_loss < best_val_loss or val_f1_score > best_f1_score:
+            if val_loss < best_val_loss:
+                #save_filepath = f"{experiment_num}_{model_name}_{epoch+1}_epochs.pth"
+                best_val_loss = val_loss
+            if val_f1_score > best_f1_score:
+                
+                best_f1_score = val_f1_score
+            
             best_epoch = epoch
             epochs_since_improvement = 0
         else:
@@ -281,11 +283,11 @@ def train(model: torch.nn.Module,
             
         if val_kappa > best_kappa:
             best_kappa = val_kappa
-            save_filepath = f"{experiment_num}_{model_name}_{epoch+1}_epochs.pth"
-            save_model(model=model,
-                       target_dir='models',
-                       model_name=model_name,
-                       file_name=save_filepath)
+            #save_filepath = f"{experiment_num}_{model_name}_{epoch+1}_epochs.pth"
+            #save_model(model=model,
+                       #target_dir='models',
+                       #model_name=model_name,
+                       #file_name=save_filepath)
         
         
         # Print out what's happening

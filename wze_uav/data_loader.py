@@ -63,7 +63,7 @@ class CustomDataset3Classes_TEMP(Dataset):
   
         
 class CustomDataset(Dataset):
-    def __init__(self, data, labels, class_names=List[str], species=None, kkl=None, transform=None):
+    def __init__(self, data, labels, class_names=None, species=None, kkl=None, transform=None):
         self.data = data
         #important: these are the original labels representing the needle or leafloss! They are changed below to 3 classes below!
         self.labels = labels
@@ -91,7 +91,7 @@ class CustomDataset(Dataset):
         
 
 class CustomTestDataset(Dataset):
-    def __init__(self, data, labels, class_names=List[str], species=None, kkl=None, transform=None):
+    def __init__(self, data, labels, species, class_names=None, kkl=None, transform=None):
         self.data = data
         #important: these are the original labels representing the needle or leafloss! They are changed below to 3 classes below!
         self.labels = labels
