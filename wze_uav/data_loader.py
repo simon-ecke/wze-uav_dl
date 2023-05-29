@@ -90,6 +90,51 @@ class CustomDataset(Dataset):
             return img, label # returns image, label
         
 
+class FilteredDataset(Dataset):
+    def __init__(self, data, labels, species=None, class_names=None, kkl=None, transform=None):
+        self.data = data
+        self.species = species
+        self.class_names = class_names
+        self.kkl = kkl
+        self.transform = transform
+
+        self.filtered_indices, self.filtered_labels = self._filter_indices_and_labels(labels)
+        
+    def _filter_indices_and_labels(self, labels):
+        filtered_indices = []
+        filtered_labels = []
+        for i, label in enumerate(labels):
+            if label not in [10, 11, 12]:
+                filtered_indices.append(i)
+                if label == 13:
+                    filtered_labels.append(10)
+                else:
+                    filtered_labels.append(label)
+
+        return filtered_indices, np.array(filtered_labels, dtype=object)
+    
+    
+    def __len__(self) -> int:
+        return len(self.filtered_indices)
+
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, int, int]:
+        filtered_index = self.filtered_indices[index]
+        img = self.data[filtered_index]
+        label = self.filtered_labels[index]
+        species = self.species[filtered_index]
+        label = int(label)
+        species = int(species)
+
+        if self.transform:
+            return self.transform(img), label
+        else:
+            return img, label
+
+    @property
+    def labels(self):
+        return np.array(self.filtered_labels.tolist(), dtype=np.int32).reshape(-1, 1)
+
+
 class CustomTestDataset(Dataset):
     def __init__(self, data, labels, species, class_names=None, kkl=None, transform=None):
         self.data = data
@@ -118,6 +163,50 @@ class CustomTestDataset(Dataset):
             return self.transform(img), label, species # returns image (transformed), label and species
         else:
             return img, label, species # returns image, label and species
+        
+        
+class FilteredTestDataset(Dataset):
+    def __init__(self, data, labels, species=None, class_names=None, kkl=None, transform=None):
+        self.data = data
+        self.species = species
+        self.class_names = class_names
+        self.kkl = kkl
+        self.transform = transform
+
+        self.filtered_indices, self.filtered_labels = self._filter_indices_and_labels(labels)
+
+    def _filter_indices_and_labels(self, labels):
+        filtered_indices = []
+        filtered_labels = []
+        for i, label in enumerate(labels):
+            if label not in [10, 11, 12]:
+                filtered_indices.append(i)
+                if label == 13:
+                    filtered_labels.append(10)
+                else:
+                    filtered_labels.append(label)
+
+        return filtered_indices, np.array(filtered_labels, dtype=object)
+
+    def __len__(self) -> int:
+        return len(self.filtered_indices)
+
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, int, int]:
+        filtered_index = self.filtered_indices[index]
+        img = self.data[filtered_index]
+        label = self.filtered_labels[index]
+        species = self.species[filtered_index]
+        label = int(label)
+        species = int(species)
+
+        if self.transform:
+            return self.transform(img), label, species
+        else:
+            return img, label, species
+
+    @property
+    def labels(self):
+        return np.array(self.filtered_labels.tolist(), dtype=np.int32).reshape(-1, 1)
 
         
 ###############################        
@@ -311,11 +400,346 @@ def hdf5_to_img_label(path_list, hashID_dict:dict, load_sets=None):
     # filter data depending on terrestrial features
     np_filter = []
     for i in range(0, len(bk_set)):
-        if kkl_set[i] > 3:
-            np_filter.append(False)
-        elif bk_set[i] <= 1:
+        if kkl_set[i] <= 3 and (bk_set[i] <= 1 or (bk_set[i] >= 320 and bk_set[i] <= 340)):
             np_filter.append(True)
-        elif bk_set[i] >= 320 and bk_set[i] <= 340:
+        else:
+            np_filter.append(False)
+        
+    image_set = image_set[np_filter]
+    label_set = label_set[np_filter]
+    species_set = species_set[np_filter]
+    kkl_set = kkl_set[np_filter]
+    bk_set = bk_set[np_filter]
+    hash_id = hash_id[np_filter]
+        
+    del rois, params_rois, data, params_data, crowns_human
+    return image_set, label_set, species_set, kkl_set, bk_set, hash_id
+
+
+def hdf5_to_img_label_autocorrelation(path_list, hashID_dict:dict, plotID_dict:dict, load_sets=None):
+    count = 0
+    for fn in tqdm(path_list, desc="Processing hdf5 datasets"):    
+        # load hdf5 data from path
+        rois, params_rois, data, params_data = exporter.load_rois_from_hdf5_v2(fn,
+                                                                               load_sets=load_sets) 
+        # fetch images
+        images = rois["images_masked"] # assigns all crown arrays from the different hdf5 files to dictionary
+        images = images.transpose(3,0,1,2) # array transpose shape from (H, W, C, n) to (n, H, W, C)
+        
+        # fetch terrestrial features 
+        crowns_human = data['crowns_human'] #get crown info with all terrestrial features
+        #labels = crowns_human['features']['terrestrial']['nbv'] # get needle or leaf loss
+        species = crowns_human['features']['terrestrial']['ba'] # get tree species
+        kkl = crowns_human['features']['terrestrial']['kkl']
+        bk = crowns_human['features']['terrestrial']['bk']
+        #labels = labels.copy() # copy to avoid memory error
+        species = species.copy()
+        kkl = kkl.copy()
+        bk = bk.copy()
+        #labels = labels.reshape(len(labels),1) # reshape from (samples,) to (samples,1)
+        species = species.reshape(len(species),1)
+        kkl = kkl.reshape(len(kkl),1)
+        bk = bk.reshape(len(bk),1)
+        if count >= 1:
+            image_set = np.concatenate((image_set, images), axis=0)  # concatenate all crown arrays to one image_set
+            #label_set = np.concatenate((label_set, labels), axis=0)  
+            species_set = np.concatenate((species_set, species), axis=0)
+            kkl_set = np.concatenate((kkl_set, kkl), axis=0)
+            bk_set = np.concatenate((bk_set, bk), axis=0)
+            count = count + 1
+        else:
+            image_set = images
+            #label_set = labels # define label_set with the first sets of labels
+            species_set = species
+            kkl_set = kkl
+            bk_set = bk
+            count = count + 1
+    
+    # get hash id
+    hash_id = []        
+    for key, value in hashID_dict.items():
+        hash_id.append(value)
+        
+    hash_id = np.array(hash_id)  
+    #hash_id = hash_id.reshape((-1, 1)) # from (samples,) to (samples,1)
+    
+    # get plot id
+    plot_id = []        
+    for key, value in plotID_dict.items():
+        plot_id.append(value)
+        
+    plot_id = np.array(plot_id) 
+    
+    label_set = plot_id
+    label_set = label_set.reshape((-1, 1))
+    # filter data depending on terrestrial features
+    np_filter = []
+    for i in range(0, len(bk_set)):
+        if kkl_set[i] <= 3 and (bk_set[i] <= 1 or (bk_set[i] >= 320 and bk_set[i] <= 340)):
+            np_filter.append(True)
+        else:
+            np_filter.append(False)
+        
+    image_set = image_set[np_filter]
+    label_set = label_set[np_filter]
+    species_set = species_set[np_filter]
+    kkl_set = kkl_set[np_filter]
+    bk_set = bk_set[np_filter]
+    hash_id = hash_id[np_filter]
+        
+    del rois, params_rois, data, params_data, crowns_human
+    return image_set, label_set, species_set, kkl_set, bk_set, hash_id
+
+
+def hdf5_to_img_label_6species(path_list, hashID_dict:dict, load_sets=None):
+    count = 0
+    for fn in tqdm(path_list, desc="Processing hdf5 datasets"):
+        # load hdf5 data from path
+        rois, params_rois, data, params_data = exporter.load_rois_from_hdf5_v2(fn,
+                                                                               load_sets=load_sets) 
+        # fetch images
+        images = rois["images_masked"] # assigns all crown arrays from the different hdf5 files to dictionary
+        images = images.transpose(3,0,1,2) # array transpose shape from (H, W, C, n) to (n, H, W, C)
+        
+        # fetch terrestrial features 
+        crowns_human = data['crowns_human'] #get crown info with all terrestrial features
+        labels = crowns_human['features']['terrestrial']['nbv'] # get needle or leaf loss
+        species = crowns_human['features']['terrestrial']['ba'] # get tree species
+        kkl = crowns_human['features']['terrestrial']['kkl']
+        bk = crowns_human['features']['terrestrial']['bk']
+        labels = labels.copy() # copy to avoid memory error
+        species = species.copy()
+        kkl = kkl.copy()
+        bk = bk.copy()
+        labels = labels.reshape(len(labels),1) # reshape from (samples,) to (samples,1)
+        species = species.reshape(len(species),1)
+        kkl = kkl.reshape(len(kkl),1)
+        bk = bk.reshape(len(bk),1)
+        if count >= 1:
+            image_set = np.concatenate((image_set, images), axis=0)  # concatenate all crown arrays to one image_set
+            label_set = np.concatenate((label_set, labels), axis=0)  
+            species_set = np.concatenate((species_set, species), axis=0)
+            kkl_set = np.concatenate((kkl_set, kkl), axis=0)
+            bk_set = np.concatenate((bk_set, bk), axis=0)
+            count = count + 1
+        else:
+            image_set = images
+            label_set = labels # define label_set with the first sets of labels
+            species_set = species
+            kkl_set = kkl
+            bk_set = bk
+            count = count + 1
+    
+    # get hash_id
+    hash_id = []        
+    for key, value in hashID_dict.items():
+        hash_id.append(value)
+        
+    hash_id = np.array(hash_id)  
+    #hash_id = hash_id.reshape((-1, 1)) # from (samples,) to (samples,1)
+    
+    # filter data depending on terrestrial features
+    np_filter = []
+    for i in range(0, len(bk_set)):
+        if kkl_set[i] <= 3 and (label_set[i] <= 80 or label_set[i] >= 99) and species_set[i] in [134, 118, 116, 100, 20, 48, 51] and (bk_set[i] <= 1 or (bk_set[i] >= 320 and bk_set[i] <= 340)):
+            np_filter.append(True)
+        else:
+            np_filter.append(False)
+         
+    image_set = image_set[np_filter]
+    label_set = label_set[np_filter]
+    species_set = species_set[np_filter]
+    kkl_set = kkl_set[np_filter]
+    bk_set = bk_set[np_filter]
+    hash_id = hash_id[np_filter]
+        
+    del rois, params_rois, data, params_data, crowns_human
+    return image_set, label_set, species_set, kkl_set, bk_set, hash_id
+
+
+def hdf5_to_img_label_5species(path_list, hashID_dict:dict, load_sets=None):
+    count = 0
+    for fn in tqdm(path_list, desc="Processing hdf5 datasets"):
+        # load hdf5 data from path
+        rois, params_rois, data, params_data = exporter.load_rois_from_hdf5_v2(fn,
+                                                                               load_sets=load_sets) 
+        # fetch images
+        images = rois["images_masked"] # assigns all crown arrays from the different hdf5 files to dictionary
+        images = images.transpose(3,0,1,2) # array transpose shape from (H, W, C, n) to (n, H, W, C)
+        
+        # fetch terrestrial features 
+        crowns_human = data['crowns_human'] #get crown info with all terrestrial features
+        labels = crowns_human['features']['terrestrial']['nbv'] # get needle or leaf loss
+        species = crowns_human['features']['terrestrial']['ba'] # get tree species
+        kkl = crowns_human['features']['terrestrial']['kkl']
+        bk = crowns_human['features']['terrestrial']['bk']
+        labels = labels.copy() # copy to avoid memory error
+        species = species.copy()
+        kkl = kkl.copy()
+        bk = bk.copy()
+        labels = labels.reshape(len(labels),1) # reshape from (samples,) to (samples,1)
+        species = species.reshape(len(species),1)
+        kkl = kkl.reshape(len(kkl),1)
+        bk = bk.reshape(len(bk),1)
+        if count >= 1:
+            image_set = np.concatenate((image_set, images), axis=0)  # concatenate all crown arrays to one image_set
+            label_set = np.concatenate((label_set, labels), axis=0)  
+            species_set = np.concatenate((species_set, species), axis=0)
+            kkl_set = np.concatenate((kkl_set, kkl), axis=0)
+            bk_set = np.concatenate((bk_set, bk), axis=0)
+            count = count + 1
+        else:
+            image_set = images
+            label_set = labels # define label_set with the first sets of labels
+            species_set = species
+            kkl_set = kkl
+            bk_set = bk
+            count = count + 1
+    
+    # get hash_id
+    hash_id = []        
+    for key, value in hashID_dict.items():
+        hash_id.append(value)
+        
+    hash_id = np.array(hash_id)  
+    #hash_id = hash_id.reshape((-1, 1)) # from (samples,) to (samples,1)
+    
+    # filter data depending on terrestrial features
+    np_filter = []
+    for i in range(0, len(bk_set)):
+        if kkl_set[i] <= 3 and species_set[i] in [134, 118, 100, 20, 48, 51] and (bk_set[i] <= 1 or (bk_set[i] >= 320 and bk_set[i] <= 340)):
+            np_filter.append(True)
+        else:
+            np_filter.append(False)
+         
+    image_set = image_set[np_filter]
+    label_set = label_set[np_filter]
+    species_set = species_set[np_filter]
+    kkl_set = kkl_set[np_filter]
+    bk_set = bk_set[np_filter]
+    hash_id = hash_id[np_filter]
+        
+    del rois, params_rois, data, params_data, crowns_human
+    return image_set, label_set, species_set, kkl_set, bk_set, hash_id
+
+
+def hdf5_to_img_label_species(path_list, hashID_dict:dict, load_sets=None):
+    count = 0
+    for fn in tqdm(path_list, desc="Processing hdf5 datasets"):
+        # load hdf5 data from path
+        rois, params_rois, data, params_data = exporter.load_rois_from_hdf5_v2(fn,
+                                                                               load_sets=load_sets) 
+        # fetch images
+        images = rois["images_masked"] # assigns all crown arrays from the different hdf5 files to dictionary
+        images = images.transpose(3,0,1,2) # array transpose shape from (H, W, C, n) to (n, H, W, C)
+        
+        # fetch terrestrial features 
+        crowns_human = data['crowns_human'] #get crown info with all terrestrial features
+        labels = crowns_human['features']['terrestrial']['nbv'] # get needle or leaf loss
+        species = crowns_human['features']['terrestrial']['ba'] # get tree species
+        kkl = crowns_human['features']['terrestrial']['kkl']
+        bk = crowns_human['features']['terrestrial']['bk']
+        labels = labels.copy() # copy to avoid memory error
+        species = species.copy()
+        kkl = kkl.copy()
+        bk = bk.copy()
+        labels = labels.reshape(len(labels),1) # reshape from (samples,) to (samples,1)
+        species = species.reshape(len(species),1)
+        kkl = kkl.reshape(len(kkl),1)
+        bk = bk.reshape(len(bk),1)
+        if count >= 1:
+            image_set = np.concatenate((image_set, images), axis=0)  # concatenate all crown arrays to one image_set
+            label_set = np.concatenate((label_set, labels), axis=0)  
+            species_set = np.concatenate((species_set, species), axis=0)
+            kkl_set = np.concatenate((kkl_set, kkl), axis=0)
+            bk_set = np.concatenate((bk_set, bk), axis=0)
+            count = count + 1
+        else:
+            image_set = images
+            label_set = labels # define label_set with the first sets of labels
+            species_set = species
+            kkl_set = kkl
+            bk_set = bk
+            count = count + 1
+    
+    # get hash_id
+    hash_id = []        
+    for key, value in hashID_dict.items():
+        hash_id.append(value)
+        
+    hash_id = np.array(hash_id)  
+    #hash_id = hash_id.reshape((-1, 1)) # from (samples,) to (samples,1)
+    
+    # filter data depending on terrestrial features
+    np_filter = []
+    for i in range(0, len(bk_set)):
+        if kkl_set[i] <= 3 and (label_set[i] <= 80 or label_set[i] >= 99) and (bk_set[i] <= 1 or (bk_set[i] >= 320 and bk_set[i] <= 340)):
+            np_filter.append(True)
+        else:
+            np_filter.append(False)
+         
+    image_set = image_set[np_filter]
+    label_set = label_set[np_filter]
+    species_set = species_set[np_filter]
+    kkl_set = kkl_set[np_filter]
+    bk_set = bk_set[np_filter]
+    hash_id = hash_id[np_filter]
+        
+    del rois, params_rois, data, params_data, crowns_human
+    return image_set, label_set, species_set, kkl_set, bk_set, hash_id
+
+
+def hdf5_to_img_label_spruce(path_list, hashID_dict:dict, load_sets=None):
+    count = 0
+    for fn in tqdm(path_list, desc="Processing hdf5 datasets"):
+        # load hdf5 data from path
+        rois, params_rois, data, params_data = exporter.load_rois_from_hdf5_v2(fn,
+                                                                               load_sets=load_sets) 
+        # fetch images
+        images = rois["images_masked"] # assigns all crown arrays from the different hdf5 files to dictionary
+        images = images.transpose(3,0,1,2) # array transpose shape from (H, W, C, n) to (n, H, W, C)
+        
+        # fetch terrestrial features 
+        crowns_human = data['crowns_human'] #get crown info with all terrestrial features
+        labels = crowns_human['features']['terrestrial']['nbv'] # get needle or leaf loss
+        species = crowns_human['features']['terrestrial']['ba'] # get tree species
+        kkl = crowns_human['features']['terrestrial']['kkl']
+        bk = crowns_human['features']['terrestrial']['bk']
+        labels = labels.copy() # copy to avoid memory error
+        species = species.copy()
+        kkl = kkl.copy()
+        bk = bk.copy()
+        labels = labels.reshape(len(labels),1) # reshape from (samples,) to (samples,1)
+        species = species.reshape(len(species),1)
+        kkl = kkl.reshape(len(kkl),1)
+        bk = bk.reshape(len(bk),1)
+        if count >= 1:
+            image_set = np.concatenate((image_set, images), axis=0)  # concatenate all crown arrays to one image_set
+            label_set = np.concatenate((label_set, labels), axis=0)  
+            species_set = np.concatenate((species_set, species), axis=0)
+            kkl_set = np.concatenate((kkl_set, kkl), axis=0)
+            bk_set = np.concatenate((bk_set, bk), axis=0)
+            count = count + 1
+        else:
+            image_set = images
+            label_set = labels # define label_set with the first sets of labels
+            species_set = species
+            kkl_set = kkl
+            bk_set = bk
+            count = count + 1
+    
+    # get hash_id
+    hash_id = []        
+    for key, value in hashID_dict.items():
+        hash_id.append(value)
+        
+    hash_id = np.array(hash_id)  
+    #hash_id = hash_id.reshape((-1, 1)) # from (samples,) to (samples,1)
+    
+    # filter data depending on terrestrial features
+    np_filter = []
+    for i in range(0, len(bk_set)):
+        if kkl_set[i] <= 3 and species_set[i] == 118 and (bk_set[i] <= 1 or (bk_set[i] >= 320 and bk_set[i] <= 340)):
             np_filter.append(True)
         else:
             np_filter.append(False)
@@ -374,13 +798,7 @@ def hdf5_to_img_label_nopine(data_path, load_sets=None):
     # filter data depending on terrestrial features
     np_filter = []
     for i in range(0, len(bk_set)):
-        if kkl_set[i] > 3:
-            np_filter.append(False)
-        elif species_set[i] == 134: # filter out pine trees
-            np_filter.append(False)
-        elif bk_set[i] <= 1:
-            np_filter.append(True)
-        elif bk_set[i] >= 320 and bk_set[i] <= 340:
+        if kkl_set[i] <= 3 and species_set[i] != 134 and (bk_set[i] <= 1 or (bk_set[i] >= 320 and bk_set[i] <= 340)): # all except pine (=134)
             np_filter.append(True)
         else:
             np_filter.append(False)
@@ -492,8 +910,47 @@ def get_unique_treeID(path_list: str):
     hashID_dict = dict(sorted(hashID_dict.items(), key=lambda x: x[0]))
     
     return hashID_dict
-        
 
+
+def get_plotID(path_list: str):
+    plotID_dict = {}
+    count = 0
+    for fn in tqdm(path_list, desc="Creating unique tree IDs..."):
+        # load hdf5 data from path
+        rois, params_rois, data, params_data = exporter.load_rois_from_hdf5_v2(fn,
+                                                                               load_sets=["images_masked"])
+       
+        # fetch terrestrial features (such as labels and species etc.)
+        tnr = fn.rsplit("\\",1)[1].split("_",1)[0].split("r",1)[1]
+        crowns_human = data['crowns_human'] #get crown info with all terrestrial features
+        enr = crowns_human['features']['terrestrial']['enr']
+        year = fn.rsplit("\\", 2)[1]
+        for i in range(len(enr)):
+            plotID_dict[count] = (tnr, year)
+            count += 1
+    
+    return plotID_dict
+
+
+def get_plotIDv2(path_list: str):
+    plotID_dict = {}
+    count = 0
+    for fn in tqdm(path_list, desc="Creating unique tree IDs..."):
+        # load hdf5 data from path
+        rois, params_rois, data, params_data = exporter.load_rois_from_hdf5_v2(fn,
+                                                                               load_sets=["images_masked"])
+       
+        # fetch terrestrial features (such as labels and species etc.)
+        tnr = fn.rsplit("\\",1)[1].split("_",1)[0].split("r",1)[1]
+        crowns_human = data['crowns_human'] #get crown info with all terrestrial features
+        enr = crowns_human['features']['terrestrial']['enr']
+        year = fn.rsplit("\\", 2)[1]
+        for i in range(len(enr)):
+            plotID_dict[count] = (tnr)
+            count += 1
+    
+    return plotID_dict
+    
 #############################################################
 ###### Define a sampler to account for class imbalance ######
 #############################################################

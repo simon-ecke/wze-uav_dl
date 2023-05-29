@@ -1,9 +1,19 @@
 # ignore files or folders
 /runs
+/wandb
+/plots
 /models
 /log_test
 /effnet_b0
 /effnet_b2
 /effnet_b7
 /EffNet_kFold_RGB_3classes_log_evaluation
-/wandb
+/logs
+/development_delete_laterv2
+/development_delete_later
+/k-fold_cross_validation-RGB-combined_11classes_plotsplit_v2.ipynb
+/k-fold_cross_validation-RGB-NIR-combined_11classes_plotsplit_v2.ipynb
+/k-fold_cross_validation-RGB-RE-NIR-combined_11classes_plotsplit_v2.ipynb
+/k-fold_cross_validation-RGB-RE-NIR-CHM-combined_11classes_plotsplit_v2.ipynb
+/k-fold_cross_validation-RGB-NIR-combined_14classes_plotsplit.ipynb
+/k-fold_cross_validation-TNR-correlation.ipynb

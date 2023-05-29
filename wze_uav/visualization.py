@@ -1,55 +1,65 @@
-# Author: Daniel Bourke
-# Code Repository: https://github.com/mrdbourke/pytorch-deep-learning
+# Author: Simon Ecke
 # 
 # Description: Visualizing random images from PyTorch Datasets.
 #
 
-# 1. Take in a Dataset as well as a list of class names
-from typing import Dict, List, Tuple
-import torch
+import torch     
 import random
 import matplotlib.pyplot as plt
+import copy
 
-def display_random_images(dataset: torch.utils.data.dataset.Dataset,
-                          classes: List[int] = None,
-                          n: int = 10,
-                          display_shape: bool = True,
-                          seed: int = None):
-    
-    # 2. Adjust display if n too high
+def display_filtered_images(dataset: torch.utils.data.dataset.Dataset,
+                              label=None,
+                              species=None,
+                              n=10,
+                              display_shape=True,
+                              seed=None, 
+                              export_path=None):
+    # Adjust display if n too high
     if n > 10:
         n = 10
         display_shape = False
-        print(f"For display purposes, n shouldn't be larger than 10, setting to 10 and removing shape display.")
-    
-    # 3. Set random seed
-    if seed:
+        print("For display purposes, n shouldn't be larger than 10. Setting n to 10 and removing shape display.")
+
+    # Set random seed
+    if seed is not None:
         random.seed(seed)
 
-    # 4. Get random sample indexes
-    random_samples_idx = random.sample(range(len(dataset)), k=n)
+    # Make a copy of the dataset
+    shuffled_dataset = copy.deepcopy(dataset)
 
-    # 5. Setup plot
+    # Shuffle and select random samples from filtered dataset
+    random.shuffle(shuffled_dataset)
+    random_samples = shuffled_dataset[:n]
+
+    # Setup plot
     plt.figure(figsize=(30, 20))
 
-    # 6. Loop through samples and display random samples 
-    for i, targ_sample in enumerate(random_samples_idx):
-        targ_image, targ_label, targ_species = dataset[targ_sample][0], dataset[targ_sample][1], dataset.species[targ_sample]
-
-        # 7. Adjust image tensor shape for plotting: [color_channels, height, width] -> [color_channels, height, width]
-        targ_image_adjust = targ_image.permute(2, 1, 0)
- 
+    # Loop through samples and display random samples
+    for i, (targ_image, targ_label, targ_species) in enumerate(random_samples):
+        # Adjust image tensor shape for plotting: [color_channels, height, width] -> [height, width, color_channels]
+        targ_image_adjust = targ_image.permute(1, 2, 0)
 
         # Plot adjusted samples
         plt.subplot(1, n, i+1)
         plt.imshow(targ_image_adjust)
         plt.axis("off")
-        if classes:
-            title = f"class: {classes[targ_label]} | {targ_label}"
-            if display_shape:
-                title = title + f"\nshape: {targ_species}"
-                title = title + f"\nshape: {targ_image_adjust.shape}"
-        plt.title(title)
+        #if display_shape:
+        #    title = f"Label: {targ_label} | Species: {targ_species}\n ID: {}\n"
+        #    #title = f"Label: {targ_label} | Species: {targ_species}\nShape: {targ_image_adjust.shape}"
+        #else:
+        #    title = f"Label: {targ_label} | Species: {targ_species}"
+        #plt.title(title)
+
+        # Export the image as PNG
+        if export_path:
+            image_filename = f"{species}_{label}_{seed}.png"
+            export_filepath = f"{export_path}/{image_filename}"
+            plt.savefig(export_filepath)
+
+    # Show the plot
+    plt.show()
+
 
 
      

@@ -9,23 +9,89 @@ import numpy as np
 from sklearn.model_selection import StratifiedGroupKFold
 
 # nbv to 3 classes
-def nbv_to_sst_3classes(label_set: np.array):
+def nbv_to_sst_3classes(image_set: np.array, label_set: np.array, species_set: np.array, kkl_set: np.array, bk_set: np.array, hash_id: np.array):
     
     label_list = []
-    for label in label_set:
-        if label >= 0 and label <= 25:
+    species_list = [20, 48, 51, 100, 118, 134]
+    for i in range(0, len(label_set)):
+        if label_set[i] >= 99: # all dead trees
+            label = 2
+            label_list.append(label)
+        elif species_set[i] in species_list and label_set[i] >= 0 and label_set[i] <= 25: # healthy trees
             label = 0
             label_list.append(label)
-        elif label >= 30 and label <= 95:
+        elif species_set[i] in species_list and label_set[i] >= 30 and label_set[i] <= 95: # stressed trees
             label = 1
             label_list.append(label)
         else:
-            label = 2
+            label = 999
             label_list.append(label)
             
     label_set = np.array(label_list)
     
-    return label_set
+    np_filter = []
+    for i in range(0, len(bk_set)):
+        if label_set[i] in [0,1,2]:
+            np_filter.append(True)
+        else:
+            np_filter.append(False)
+         
+    image_set = image_set[np_filter]
+    label_set = label_set[np_filter]
+    species_set = species_set[np_filter]
+    kkl_set = kkl_set[np_filter]
+    bk_set = bk_set[np_filter]
+    hash_id = hash_id[np_filter]
+    
+    return image_set, label_set, species_set, kkl_set, bk_set, hash_id
+
+
+# nbv to 3 classes
+def nbv_to_sst_6classes_combined(image_set: np.array, label_set: np.array, species_set: np.array, kkl_set: np.array, bk_set: np.array, hash_id: np.array):
+    
+    label_list = []
+    species_list = [20, 48, 51, 100, 118, 134]
+    acer_species = [5, 4, 1]
+    larix_species = [116, 117]
+    for label in label_set:
+        if label >= 99: # all dead trees
+            label = 5
+            label_list.append(label)
+        elif species_set[i] in species_list and label_set[i] >= 0 and label_set[i] <= 25: # healthy trees
+            label = 0
+            label_list.append(label)
+        elif species_set[i] in species_list and label_set[i] >= 30 and label_set[i] <= 95: # stressed trees
+            label = 1
+            label_list.append(label)
+        elif species_set[i] in larix_species:
+            label = 2
+            label_list.append(label)
+        elif species_set[i] in acer_species:
+            label = 3
+            label_list.append(label)
+        elif species_set[i] == 10: #Betula pendula
+            label = 4
+            label_list.append(label)
+        else:
+            label = 999
+            
+    label_set = np.array(label_list)
+    
+    np_filter = []
+    for i in range(0, len(bk_set)):
+        if label_set[i] in [0,1,2]:
+            np_filter.append(True)
+        else:
+            np_filter.append(False)
+         
+    image_set = image_set[np_filter]
+    label_set = label_set[np_filter]
+    species_set = species_set[np_filter]
+    kkl_set = kkl_set[np_filter]
+    bk_set = bk_set[np_filter]
+    hash_id = hash_id[np_filter]
+    
+    return image_set, label_set, species_set, kkl_set, bk_set, hash_id
 
 
 # nbv to 4 classes
@@ -78,36 +144,206 @@ def nbv_to_sst_5classes(label_set: np.array):
 
 
 # species IDs to classes
-def species_to_classes(species_set: np.array):
+def species_to_7classes(species_set: np.array, nbv_set: np.array):
     
     species_list = []
-    oak_species = [48, 51, 98]
-    other_conifers = [103, 104, 106, 116, 117, 119, 120, 123, 128, 129, 133, 135, 136, 137]
-    for tree in species_set:
-        if tree == 118: # spruces = species ID 118
+    oak_species = [48, 51]
+    #other_conifers = [103, 104, 106, 116, 117, 119, 120, 123, 128, 129, 133, 135, 136, 137]
+    for i in range(len(species_set)):
+        if nbv_set[i] >= 99:
+            tree = 6
+            species_list.append(tree)
+        elif species_set[i] == 118: # spruces = species ID 118
             tree = 0
             species_list.append(tree)
-        elif tree == 134: # pines
+        elif species_set[i] == 134: # pines
             tree = 1
             species_list.append(tree)
-        elif tree == 100: # firs
+        elif species_set[i] == 100: # firs
             tree = 2
             species_list.append(tree)
-        elif tree == 20: # beeches
+        elif species_set[i] == 20: # beeches
             tree = 3
             species_list.append(tree)
-        elif tree in oak_species: # oaks
+        elif species_set[i] in oak_species: # oaks
             tree = 4
             species_list.append(tree)
-        elif tree in other_conifers: # other conifers
+        elif species_set[i] == 116: # other conifers
+            tree = 5
+            species_list.append(tree) 
+        else:
+            tree = 7
+        #    species_list.append(tree) # other broad-leaved trees
+            
+    species_set = np.array(species_list)
+    return species_set
+
+
+def species_to_classes(species_set: np.array, nbv_set: np.array):
+    
+    species_list = []
+    oak_species = [48, 51]
+    other_conifers = [103, 104, 106, 117, 119, 120, 123, 128, 129, 133, 135, 136, 137]
+    for i in range(len(species_set)):
+        if nbv_set[i] >= 99:
+            tree = 10
+            species_list.append(tree)
+        elif species_set[i] == 118: # spruces = species ID 118
+            tree = 0
+            species_list.append(tree)
+        elif species_set[i] == 134: # pines
+            tree = 1
+            species_list.append(tree)
+        elif species_set[i] == 100: # firs
+            tree = 2
+            species_list.append(tree)
+        elif species_set[i] == 116: # Larix
+            tree = 3
+            species_list.append(tree)
+        elif species_set[i] == 20: # beeches
+            tree = 4
+            species_list.append(tree)
+        elif species_set[i] in oak_species: # oaks
             tree = 5
             species_list.append(tree)
-        else:
+        elif species_set[i] == 5: # Acer pseudoplatanus
             tree = 6
+            species_list.append(tree)
+        elif species_set[i] == 10: # Betula pendula
+            tree = 7
+            species_list.append(tree)
+        elif species_set[i] in other_conifers: 
+            tree = 8
+            species_list.append(tree) 
+        else:
+            tree = 9 #other broad-leaved trees
             species_list.append(tree) # other broad-leaved trees
             
     species_set = np.array(species_list)
     return species_set
+
+
+# species and stress level to classes
+def combined_to_classes(species_set: np.array, nbv_set: np.array):
+    
+    species_list = []
+    oak_species = [48, 51]
+    #other_conifers = [103, 104, 106, 116, 117, 119, 120, 123, 128, 129, 133, 135, 136, 137]
+    for i in range(len(species_set)):
+        if nbv_set[i] >= 99: # dead trees
+            tree = 10
+            species_list.append(tree)
+        elif species_set[i] == 118 and nbv_set[i] >= 0 and nbv_set[i] <= 25: # healthy spruces
+            tree = 0
+            species_list.append(tree)
+        elif species_set[i] == 118 and nbv_set[i] >= 30 and nbv_set[i] <= 95: # stressed spruces
+            tree = 1
+            species_list.append(tree)
+        elif species_set[i] == 134 and nbv_set[i] >= 0 and nbv_set[i] <= 25: # healthy pines
+            tree = 2
+            species_list.append(tree)
+        elif species_set[i] == 134 and nbv_set[i] >= 30 and nbv_set[i] <= 95: # stressed pines
+            tree = 3
+            species_list.append(tree)
+        elif species_set[i] == 100 and nbv_set[i] >= 0 and nbv_set[i] <= 25: # healthy firs
+            tree = 4
+            species_list.append(tree)
+        elif species_set[i] == 100 and nbv_set[i] >= 30 and nbv_set[i] <= 95: # stressed firs
+            tree = 5
+            species_list.append(tree)
+        elif species_set[i] == 20 and nbv_set[i] >= 0 and nbv_set[i] <= 25: # healthy beeches
+            tree = 6
+            species_list.append(tree)
+        elif species_set[i] == 20 and nbv_set[i] >= 30 and nbv_set[i] <= 95: # stressed beeches
+            tree = 7
+            species_list.append(tree)
+        elif species_set[i] in oak_species and nbv_set[i] >= 0 and nbv_set[i] <= 25: # healthy oaks
+            tree = 8
+            species_list.append(tree)
+        elif species_set[i] in oak_species and nbv_set[i] >= 30 and nbv_set[i] <= 95: # stressed oaks
+            tree = 9
+            species_list.append(tree) 
+        else:
+            tree = 999
+        #    species_list.append(tree) # other broad-leaved trees
+            
+    species_set = np.array(species_list)
+    return species_set
+
+
+# species and stress level to classes
+def combined_to_classesv2(species_set: np.array, nbv_set: np.array, image_set: np.array, kkl_set: np.array, bk_set: np.array, hash_id: np.array):
+    
+    species_list = []
+    oak_species = [48, 51]
+    acer_species = [5, 4, 1]
+    larix_species = [116, 117]
+    #other_conifers = [103, 104, 106, 116, 117, 119, 120, 123, 128, 129, 133, 135, 136, 137]
+    for i in range(len(species_set)):
+        if nbv_set[i] >= 99: # dead trees
+            tree = 13
+            species_list.append(tree)
+        elif species_set[i] == 118 and nbv_set[i] >= 0 and nbv_set[i] <= 25: # healthy spruces
+            tree = 0
+            species_list.append(tree)
+        elif species_set[i] == 118 and nbv_set[i] >= 30 and nbv_set[i] <= 95: # stressed spruces
+            tree = 1
+            species_list.append(tree)
+        elif species_set[i] == 134 and nbv_set[i] >= 0 and nbv_set[i] <= 25: # healthy pines
+            tree = 2
+            species_list.append(tree)
+        elif species_set[i] == 134 and nbv_set[i] >= 30 and nbv_set[i] <= 95: # stressed pines
+            tree = 3
+            species_list.append(tree)
+        elif species_set[i] == 100 and nbv_set[i] >= 0 and nbv_set[i] <= 25: # healthy firs
+            tree = 4
+            species_list.append(tree)
+        elif species_set[i] == 100 and nbv_set[i] >= 30 and nbv_set[i] <= 95: # stressed firs
+            tree = 5
+            species_list.append(tree)
+        elif species_set[i] == 20 and nbv_set[i] >= 0 and nbv_set[i] <= 25: # healthy beeches
+            tree = 6
+            species_list.append(tree)
+        elif species_set[i] == 20 and nbv_set[i] >= 30 and nbv_set[i] <= 95: # stressed beeches
+            tree = 7
+            species_list.append(tree)
+        elif species_set[i] in oak_species and nbv_set[i] >= 0 and nbv_set[i] <= 25: # healthy oaks
+            tree = 8
+            species_list.append(tree)
+        elif species_set[i] in oak_species and nbv_set[i] >= 30 and nbv_set[i] <= 95: # stressed oaks
+            tree = 9
+            species_list.append(tree)
+        elif species_set[i] in larix_species and nbv_set[i] >=0: # Larix decidua/kaempferi
+            tree = 10
+            species_list.append(tree)
+        elif species_set[i] in acer_species and nbv_set[i] >=0: # acer spp.
+            tree = 11
+            species_list.append(tree)
+        elif species_set[i] == 10 and nbv_set[i] >= 0: # Betula pendula
+            tree = 12
+            species_list.append(tree)
+        else:
+            tree = 999
+            species_list.append(tree) # other broad-leaved trees
+            
+    species_setv2 = np.array(species_list)
+    label_set = species_setv2
+    
+    np_filter = []
+    for i in range(0, len(bk_set)):
+        if label_set[i] in [0,1,2,3,4,5,6,7,8,9,10,11,12,13]:
+            np_filter.append(True)
+        else:
+            np_filter.append(False)
+         
+    image_set = image_set[np_filter]
+    label_set = label_set[np_filter]
+    species_set = species_set[np_filter]
+    kkl_set = kkl_set[np_filter]
+    bk_set = bk_set[np_filter]
+    hash_id = hash_id[np_filter]
+    
+    return image_set, label_set, species_set, kkl_set, bk_set, hash_id
 
 
 def data_split_TEMP(image_set: np.array, label_set: np.array, hash_id: np.array, species_set: np.array, test_size=0.15, random_state=42):
@@ -246,13 +482,13 @@ def data_split_TEMP(image_set: np.array, label_set: np.array, hash_id: np.array,
     return sub_image_set, sub_label_set, sub_hash_id, sub_species_set, test_image_set, test_label_set, test_hash_id, test_species_set
 
 
-def data_split(image_set: np.array, label_set: np.array, hash_id: np.array, species_set: np.array, test_size=0.1667, random_state=42, seed=2):
+def data_split(image_set: np.array, label_set: np.array, hash_id: np.array, species_set: np.array, n_splits=6, random_state=42, seed=2):
      
     # group the hashIDs to get the unique values of hashIDs    
     groups = hash_id[:, 0] 
     print("ORIGINAL POSITIVE RATIO:", label_set.mean())
     # create a StratifiedGroupKFold instance
-    cv = StratifiedGroupKFold(n_splits=6, shuffle=True, random_state=random_state)
+    cv = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
     # loop through the first fold
     for fold, (sub_ids, test_ids) in enumerate(cv.split(image_set, label_set, groups)):
         print("Fold :", fold)

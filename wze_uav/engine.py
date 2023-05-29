@@ -265,29 +265,12 @@ def train(model: torch.nn.Module,
                        file_name=save_filepath)
         
         # possibility to save model depending on certain conditions
-        if val_loss < best_val_loss or val_f1_score > best_f1_score:
-            if val_loss < best_val_loss:
-                #save_filepath = f"{experiment_num}_{model_name}_{epoch+1}_epochs.pth"
-                best_val_loss = val_loss
-            if val_f1_score > best_f1_score:
-                
-                best_f1_score = val_f1_score
-            
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
             best_epoch = epoch
             epochs_since_improvement = 0
         else:
             epochs_since_improvement += 1
-            
-        if epoch == 5:
-            best_val_loss = float('inf')
-            
-        if val_kappa > best_kappa:
-            best_kappa = val_kappa
-            #save_filepath = f"{experiment_num}_{model_name}_{epoch+1}_epochs.pth"
-            #save_model(model=model,
-                       #target_dir='models',
-                       #model_name=model_name,
-                       #file_name=save_filepath)
         
         
         # Print out what's happening
